@@ -1,0 +1,435 @@
+---
+title: "Batch folding analysis"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+Sys.setenv(RETICULATE_PYTHON = "/home/joris/miniconda3/bin/python")
+
+pacman::p_load(magrittr,dplyr,ggplot2, RCy3, reticulate)
+
+```
+
+## Data import
+
+```{r data import}
+setwd("~/scratch/folding_comparision/")
+comparisons <- read.csv2("folding_fatcat_output_inc_rbp1.tsv",
+                         sep='\t', stringsAsFactors = F)
+comparisons$opt.rmsd %<>%as.numeric
+comparisons$P.value %<>% as.numeric
+comparisons$Identity %<>% as.numeric
+
+```
+
+## Pvalue adjustment
+
+```{r}
+adj_factor <- comparisons$Subject %>% 
+  unique() %>% length
+comparisons$P.adjusted <- as.numeric(comparisons$P.value) * adj_factor
+
+comparisons.filtered <- comparisons %>% 
+  filter(P.adjusted <=0.05)
+```
+
+## Plot Identity All vs significant only
+
+```{r}
+All_identity <- cbind(as.numeric(comparisons$Identity), rep("All",times=nrow(comparisons)))
+sig_identity <- cbind(comparisons.filtered$Identity, rep("Significant only", times=nrow(comparisons.filtered)))
+
+Identities <- rbind(All_identity, sig_identity) %>% data.frame
+colnames(Identities) <- c("Identity","Set")
+Identities$Identity %<>% as.numeric
+
+All_rmsd <- cbind(as.numeric(comparisons$opt.rmsd), rep("All",times=nrow(comparisons)))
+sig_rmsd <- cbind(comparisons.filtered$opt.rmsd, rep("Significant only", times=nrow(comparisons.filtered)))
+RMSDs <- rbind(All_rmsd, sig_rmsd) %>% data.frame(stringsAsFactors = F)
+colnames(RMSDs) <- c("RMSD", "Set")
+RMSDs$RMSD %<>% as.numeric
+
+Identities %>% 
+  ggplot +
+  geom_density(
+    aes(
+      x=Identity,
+      fill=Set
+      ),
+    alpha=0.5
+    ) +
+  scale_x_continuous(name='Percent Sequence Identity',breaks=c(seq(1,30,2),seq(30,50,5),80)) +
+  ggtitle("Sequence Identity")
+  
+```
+
+## Sanity check plot Score vs length
+
+```{r}
+# Sanity check
+plot(comparisons.filtered$score, comparisons.filtered$align.len)
+```
+
+## Vulcano plot Identity vs P-value
+
+```{r}
+plot.df <- cbind(
+  as.numeric(comparisons$Identity),
+  -1*log10(as.numeric(comparisons$P.adjusted+0.00000000001))
+)
+
+plot.df%<>% as.data.frame()
+colnames(plot.df) <- c("X","Y")
+
+pvalue_log <- -1*log10(0.05)
+plot.df %>% 
+  ggplot +
+  geom_point(
+    aes(
+      x = X,
+      y = Y, 
+      colour = Y >= pvalue_log
+      )
+    ) +
+  scale_colour_manual(
+    name = "Significant", 
+    values = setNames(c("blue","black"), 
+                      c(T,F)
+                      )
+    )+
+  xlab("Percent Identity") +
+  ylab("-Log10(pvalue)") +
+  ggtitle("Identity vs P-value") +
+  theme_bw() 
+
+ggsave(
+  filename = 'identity_vs_pvalue.pdf',
+  device = 'pdf')
+ggsave(
+  filename = 'identity_vs_pvalue.png',
+  device = 'png')
+```
+
+## Gpal Effectors
+
+```{r}
+effector_ids_gpal <- read.csv(
+  "gpal_effector_lookup_table.txt", 
+  sep = '\t',header = F)
+colnames(effector_ids_gpal) <- c("ID",'Family')
+
+gpal_effector_matches <- comparisons.filtered %>% 
+  filter(Subject %in% effector_ids_gpal$ID)
+
+
+effector_family_names <- effector_ids_gpal %>% 
+  filter(ID %in% gpal_effector_matches$Subject)
+
+write.csv(
+  gpal_effector_matches, 
+  file='gpal_effectors_matches.csv', 
+  quote = F, 
+  )
+
+lookup_effector_family <- function(fam_name){
+  print(fam_name)
+  table.filter <- gpal_effector_matches %>% 
+  filter(Subject %in% effector_family_names[which(effector_family_names$Family ==fam_name), "ID"])
+  
+  table.filter$Subject %>% 
+    unique %>% 
+    length %>% 
+    print
+  
+  table.filter$Query %>% 
+    unique %>% 
+    length %>% 
+    print
+  
+  table.filter %>% 
+    .[,'Identity'] %>% 
+    mean %>% 
+    print
+  
+  return(table.filter)
+}
+
+gland5_table  <- lookup_effector_family('GLAND5_CDS.fasta')
+sprysec_table <- lookup_effector_family('SPRYSEC_CDS.fasta')
+vap_table     <- lookup_effector_family('VAP_CDS.fasta')
+
+ 
+
+```
+
+## Playground
+
+```{r}
+
+##########################
+table(comparisons.filtered$Query) %>% 
+  sort(decreasing = T) %>%
+  #density %>% 
+  plot(type='l',xaxt="n")
+
+
+subset <- comparisons.filtered %>% 
+  filter(Query=="g8298.pdb") %>% 
+  filter(opt.rmsd <=0.8)
+
+
+plot(
+  subset$Identity, 
+  subset$opt.rmsd, 
+  main="Identity vs RMSD",
+  xlab="Percent Identity",
+  ylab="Optimised RMSD")
+
+
+subset$opt.rmsd %>% density %>%  plot(main="Optomised RMSD", xlab='RMSD')
+
+
+sprysec_example = "Gpal_D383_g01418.pdb"
+sprysec_example2 = "Gpal_D383_g12494.pdb"
+subset_sprysec <- comparisons.filtered %>% 
+  filter(Subject==sprysec_example2)
+
+
+subset_sprysec$opt.rmsd %>% density %>%  plot(main="Optomised RMSD", xlab='RMSD')
+```
+
+# Heatmap
+
+```{r}
+library(gplots)
+pvalue_matrix <- comparisons %>% 
+  .[,c("Query","Subject","P.adjusted")] %>%
+  reshape(
+    direction = 'wide', 
+    idvar="Query", 
+    timevar = "Subject"
+    )  
+
+rownames(pvalue_matrix) <- pvalue_matrix[,1]
+pvalue_matrix[,1] <- NULL
+
+d <- pvalue_matrix %>% 
+  as.matrix %>% 
+  add(0.0000001) %>% 
+  log10 %>% 
+  multiply_by(-1)
+
+heatmap.2(
+  d,
+  trace="none"
+  )
+
+```
+
+# Cytoscape export
+
+
+### Gpal Functional Annotations
+```{r}
+reticulate::source_python("misc.py")
+library(stringr)
+annotations_pal <- read.csv2(
+  "/mnt/nemahomes/steen176/Genomes/Annotations/G_pallida_annotations_onlyt1pruned.csv",
+  sep='\t') 
+
+rownames(annotations_pal) <- annotations_pal$SeqName
+
+gpal_nodes <- cbind(
+  comparisons.filtered$Subject, 
+  rep(
+    "Gpal", times = length(comparisons.filtered$Subject)
+    )
+  )
+colnames(gpal_nodes) <- c('id','species')
+
+gpal_ids_clean <- strip_pdb_ids(gpal_nodes[,'id'])
+
+gpal_nodes %<>% cbind(., 
+                      annotations_pal[
+                        gpal_ids_clean,
+                        c(
+                          "Description",
+                          "GO.IDs", 
+                          "Enzyme.Names", 
+                          "InterPro.GO.Names", 
+                          "InterPro.IDs"
+                          )
+                        ]
+                      )
+
+
+
+```
+
+### Mchit Import Functional Annotations
+```{r}
+annotations_mchit <- read.csv2(
+  "/mnt/dataHDD/scratch/chitwoodi_genomes/annotation/omicsbox_table_onlyt1.txt",
+  sep = '\t'
+  )
+
+rownames(annotations_mchit) <- annotations_mchit$SeqName
+
+mchit_nodes <- cbind(
+  comparisons.filtered$Query, 
+  rep(
+    "Mchit", times = length(comparisons.filtered$Query)
+    )
+  )
+colnames(mchit_nodes) <- c('id','species')
+
+mchit_ids_clean <- strip_pdb_ids(mchit_nodes[,'id'])
+
+mchit_nodes %<>% cbind(., 
+                      annotations_mchit[
+                        mchit_ids_clean,
+                        c(
+                          "Description",
+                          "GO.IDs", 
+                          "Enzyme.Names", 
+                          "InterPro.GO.Names", 
+                          "InterPro.IDs"
+                          )
+                        ]
+                      )
+```
+
+### Format Node and Edge data frames
+
+```{r format node edges}
+library(RCy3)
+
+nodes <- rbind(
+  gpal_nodes,
+  mchit_nodes
+  ) %>% 
+  data.frame
+
+edges <- comparisons.filtered[,c('Query',"Subject", "Identity",'P.adjusted')] %>% data.frame
+colnames(edges) <- c("source","target", "Identity",'P.adjusted')
+write.csv2(edges, file = 'cytoscape_edges.csv')
+
+
+```
+
+### Export Cytoscape
+
+Inside cytoscape I run the clustering algorithm 'fast greedy' to get cluster number assigned to the nodes
+
+```{r export cytoscape}
+createNetworkFromDataFrames(nodes,edges)
+
+style.name = "myStyle"
+defaults <- list(NODE_SHAPE="circle",
+                 NODE_SIZE=30,
+                 EDGE_TRANSPARENCY=30,
+                 NODE_LABEL_POSITION="W,E,c,0.00,0.00")
+
+nodeLabels <- mapVisualProperty('node label','id','p')
+nodeFills <- mapVisualProperty('node fill color','species','d',c("Gpal","Mchit"), c("#FF9900","#66AAAA"))
+edgeWidth <- mapVisualProperty('edge width','Identity','p')
+
+
+createVisualStyle(style.name, defaults, list(nodeFills,edgeWidth))
+setVisualStyle(style.name)
+
+```
+
+## Merge cluster number and Identity/pvalue
+
+```{r}
+
+reticulate::source_python('parse_cluster_info.py')
+cluster_identities <- get_cluster_identities()
+
+cluster_identities$Identity %<>% 
+  sapply(function(x) sub(pattern = ",",replacement = '.',x = x)) %>%   as.numeric()
+cluster_identities$P.adjusted %<>% 
+  sapply(function(x) sub(pattern = ",",replacement = '.',x = x)) %>%   as.numeric()
+```
+
+```{r}
+cluster_sizes <- cluster_identities$Cluster %>% table
+cluster_sizes_pruned <- cluster_sizes %>%  
+  magrittr::is_less_than(2) %>% 
+  `!` %>%  
+  which %>% 
+  names
+
+cluster_identities_pruned <- cluster_identities %>% 
+  filter(Cluster %in% cluster_sizes_pruned)
+
+#rownames(cluster_identities_pruned) <- cluster_identities_pruned$Cluster
+```
+
+## Plot identity vs pvalue -\> per cluster
+
+```{r}
+cluster_identities_pruned %>% 
+  ggplot + 
+  geom_point(aes(x=Identity, y = -1*log10(P.adjusted+0.000001)))  +
+  facet_wrap(~Cluster)
+```
+
+```{r}
+clusterNames <- unique(cluster_identities$Cluster)
+cluster_table <- read.csv2('cytoscape_clusters.csv', sep=',')
+
+
+get_most_occuring <- function(var,species,cl_clean){
+  descriptions <- cluster_table %>%
+    filter(X__fastGreedyCluster== cl_clean & species==species) %>% 
+    .[[var]]
+  
+  descriptions[!descriptions %in% c('---NA---','unnamed protein product','no IPS match','no GO terms')] %>% 
+    table %>% 
+    sort(decreasing = T) %>% .[1] %>% 
+    names %>% 
+    return
+}
+
+
+cluster_descriptions <- sapply(clusterNames, function(cluster){
+  cl_clean <- sub('Cl','',cluster)
+  avg_cluster_identity <- cluster_identities %>%
+    filter(Cluster == cluster) %>%
+    .$Identity %>%
+    mean
+  
+  description_gpal <- get_most_occuring('Description', 'Gpal',cl_clean)
+  GOnames_gpal <- get_most_occuring('InterPro.GO.Names', 'Gpal',cl_clean)
+  
+  description_mchit <- get_most_occuring('Description', 'Mchit',cl_clean)
+  
+  GOnames_mchit <- get_most_occuring('InterPro.GO.Names', 'Mchit',cl_clean)
+  
+  return(
+    c(
+      cluster,
+      avg_cluster_identity,
+      description_gpal, 
+      description_mchit,
+      GOnames_gpal,
+      GOnames_mchit
+      )
+    )
+})  %>% do.call(rbind.data.frame, .)
+
+colnames(cluster_descriptions) <- c(
+  "Cluster", 
+  "AvgClusterIdentity",
+  "gpalDescription",
+  "mchitDescription",
+  "gpalGOnames",
+  "mchitGOnames"
+  )
+cluster_descriptions$AvgClusterIdentity %<>% as.numeric
+View(cluster_descriptions)
+```

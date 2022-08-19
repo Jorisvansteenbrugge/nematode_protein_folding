@@ -1,0 +1,9 @@
+# Ignore everything
+*
+
+# But not py and R scripts
+!*.py
+!*.R
+!*.Rmd
+
+!*/

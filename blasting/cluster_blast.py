@@ -6,12 +6,12 @@ from itertools import combinations
 import pandas as pd
 import logging
 import sys
-
+import numpy as np
 import subprocess as sp
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
-clusterfile = "/home/joris/scratch/folding_comparision/cytoscape_clusters.csv"
+clusterfile = "/home/joris/scratch/folding_comparision/cytoscape_clusters_new.csv"
 """
 Index(['__fastGreedyCluster', 'Description', 'Enzyme.Names', 'GO.IDs', 'id',
        'InterPro.GO.Names', 'InterPro.IDs', 'name', 'selected', 'shared name',
@@ -100,6 +100,9 @@ def filter_blast_output(dataframe, evalue_thresh=0.05, pident_thresh=70,qcov_thr
     return filtered
 
 def get_average_identity(clean_ids, seq_map):
+    if len(clean_ids) == 1:
+        return np.nan
+
     pidentities_all = []
     for combination in combinations(clean_ids,  2):
         query_tmpfile   = NamedTemporaryFile()
@@ -108,35 +111,24 @@ def get_average_identity(clean_ids, seq_map):
         prep_query_fasta([combination[0]],seq_map, query_tmpfile)
         prep_query_fasta([combination[1]],seq_map, subject_tmpfile)
 
-        output = jp.run_ncbi_blast(seq_file_name=query_tmpfile.name,
-                          remote=False,
-                          pairwise=True,
-                          subject=subject_tmpfile.name,
-                          outfmt="'6 qseqid sseqid pident qcovs evalue staxid bitscore'")
+        raw_needle_output = jp.run_pairwise_needle(query_tmpfile.name,subject_tmpfile.name)
+        pairwise_identity = jp.get_identity_from_needle_output(raw_needle_output)
 
         query_tmpfile.close()
         subject_tmpfile.close()
 
-        logging.debug(f"Blast output: {output}")
+        logging.info(f"Pairwise Identity: {pairwise_identity}")
 
-        pidentities = []
-        for line in output.split("\n"):
-            line = line.split()
-            try:
-                pidentities.append(float(line[2]))
-            except:
-                logging.debug(f"error in get_everage_identity line: {'-'.join(line)}")
-                pass
-        try:
-            pidentities_all.append(sum(pidentities)/len(pidentities))
-        except:
-            logging.debug(f"error in division in get_everage_identity, line: {'-'.join(output)}")
-            return 0
+        pidentities_all.append(float(pairwise_identity))
+
+
     try:
-        return sum(pidentities_all)/len(pidentities_all)
+        return (sum(pidentities_all)/len(pidentities_all))
     except ZeroDivisionError:
-        logging.debug(f"Zero divisionerror in get_everage_identity line: {pidentities_all}")
-        return None
+        #print(pidentities_all)
+        loggin.ERROR("ERROR")
+        sys.exit()
+
 
 
 if __name__== "__main__":
@@ -163,17 +155,20 @@ if __name__== "__main__":
                                      (cluster_file['__fastGreedyCluster']==cluster)]
 
             clean_gids = [clean_cluster_gene_id(gid) for gid in list(cluster_c['name'])]
-
+            logging.debug(clean_gids)
             """
             Get within species average sequence identity of the cluster
             """
             pident = get_average_identity(clean_gids, seq_maps[species])
+            logging.info(f"average pairwise identity Cl{cluster} for {species}: {pident}")
             out_line.append(str(pident))
+
 
 
             """
             NCBI blast to search in other species
             """
+            logging.debug(f"Found gene ids: {','.join(clean_gids)}")
             prep_query_fasta(
                 seq_ids=clean_gids,
                 seq_map=seq_maps[species],

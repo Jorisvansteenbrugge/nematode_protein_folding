@@ -16,11 +16,25 @@ pacman::p_load(magrittr,dplyr,ggplot2, RCy3, reticulate)
 
 ```{r data import}
 setwd("~/scratch/folding_comparision/")
-comparisons <- read.csv2("folding_fatcat_output_inc_rbp1.tsv",
-                         sep='\t', stringsAsFactors = F)
+comparisons <- read.csv2(
+  "folding_fatcat_output_inc_rb1_globalidentities.tsv", 
+  sep='\t', 
+  stringsAsFactors = F
+  ) %>% 
+  rbind(., read.csv2(
+    "folding_fatcat_output_rbp_vs_all_globalidentities.tsv", 
+    sep='\t', 
+    stringsAsFactors = F
+    )
+  )
+  
+  
+  
 comparisons$opt.rmsd %<>%as.numeric
 comparisons$P.value %<>% as.numeric
 comparisons$Identity %<>% as.numeric
+comparisons$global_identity %<>% as.numeric
+
 
 ```
 
@@ -38,8 +52,8 @@ comparisons.filtered <- comparisons %>%
 ## Plot Identity All vs significant only
 
 ```{r}
-All_identity <- cbind(as.numeric(comparisons$Identity), rep("All",times=nrow(comparisons)))
-sig_identity <- cbind(comparisons.filtered$Identity, rep("Significant only", times=nrow(comparisons.filtered)))
+All_identity <- cbind(as.numeric(comparisons$global_identity), rep("All",times=nrow(comparisons)))
+sig_identity <- cbind(comparisons.filtered$global_identity, rep("Significant only", times=nrow(comparisons.filtered)))
 
 Identities <- rbind(All_identity, sig_identity) %>% data.frame
 colnames(Identities) <- c("Identity","Set")
@@ -76,7 +90,7 @@ plot(comparisons.filtered$score, comparisons.filtered$align.len)
 
 ```{r}
 plot.df <- cbind(
-  as.numeric(comparisons$Identity),
+  as.numeric(comparisons$global_identity),
   -1*log10(as.numeric(comparisons$P.adjusted+0.00000000001))
 )
 
@@ -111,6 +125,32 @@ ggsave(
   filename = 'identity_vs_pvalue.png',
   device = 'png')
 ```
+
+## How many is N in each group
+```{r}
+ident_threshold <- 30
+low_ident_noSig <- comparisons %>% 
+  filter(P.adjusted >= 0.05 & global_identity < ident_threshold) 
+low_ident_Sig <- comparisons %>% 
+  filter(P.adjusted < 0.05 & global_identity < ident_threshold) 
+h_ident_noSig <- comparisons %>% 
+  filter(P.value >= 0.05 & global_identity >= ident_threshold)
+h_ident_Sig <- comparisons %>% 
+  filter(P.adjusted < 0.05 & global_identity >= ident_threshold) 
+
+low_ident_noSig %>% nrow
+low_ident_Sig %>% nrow
+h_ident_noSig%>% nrow
+h_ident_Sig%>% nrow
+```
+## Random select a pair in each group
+```{r}
+low_ident_noSig[sample(nrow(low_ident_noSig),size = 1),] 
+low_ident_Sig[sample(nrow(low_ident_Sig),size = 1), c("Query", "Subject")] %>% paste
+h_ident_noSig[sample(nrow(h_ident_noSig),size = 1), c("Query", "Subject")] %>% paste
+h_ident_Sig[sample(nrow(h_ident_Sig),size = 1), c("Query", "Subject")] %>% paste
+```
+
 
 ## Gpal Effectors
 
@@ -369,7 +409,7 @@ cluster_identities_pruned <- cluster_identities %>%
 #rownames(cluster_identities_pruned) <- cluster_identities_pruned$Cluster
 ```
 
-## Plot identity vs pvalue -\> per cluster
+## Plot identity vs pvalue -> per cluster
 
 ```{r}
 cluster_identities_pruned %>% 
@@ -380,20 +420,80 @@ cluster_identities_pruned %>%
 
 ```{r}
 clusterNames <- unique(cluster_identities$Cluster)
-cluster_table <- read.csv2('cytoscape_clusters.csv', sep=',')
+cluster_table <- read.csv2('cytoscape_clusters_new.csv', sep=',')
+
+```
+
+# Cluster average identity
+```{r}
+
+```
 
 
+
+## Cluster degrees
+```{r}
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+cluster_sizes = cluster_table$X__fastGreedyCluster %>% table 
+
+cluster_sizes[which(cluster_sizes != 2)] %>% mean
+
+
+## 1-1 cluster names
+cl_names <- cluster_sizes[which(cluster_sizes == 2)] %>%
+  names %>%
+  sapply(function(x)
+    paste0('Cl', x)) %>%
+  as.character
+
+cluster_descriptions %>% 
+  filter(Cluster %in% cl_names) %>% 
+  View
+
+```
+
+## Within cluster per species identities
+run the blast python script first
+```{r}
+within_cluster_stats <- read.csv(
+  "blasting/within_cluster_stats2.0.csv",
+  sep = ';')
+
+within_cluster_stats$Mean_identity[is.nan(within_cluster_stats$Mean_identity ) ] <- NA
+
+within_cluster_stats$Mean_identity |> mean(na.rm = T)
+#within_cluster_stats$GpalMeanIdentity %>% mean(na.rm = T)
+
+colnames(within_cluster_stats)
+within_cluster_stats |> mutate(globo_expansion=)
+
+plot <- within_cluster_stats |>
+  ggplot(aes(x=Species,y=log2(Exp_value),fill=Exp_species)) +
+  geom_bar(stat = "identity",
+           position = "stack")+
+  facet_wrap(~Cluster)
+```
+
+
+
+## Cluster function annotation
+```{r}
 get_most_occuring <- function(var,species,cl_clean){
   descriptions <- cluster_table %>%
-    filter(X__fastGreedyCluster== cl_clean & species==species) %>% 
+    filter(X__fastGreedyCluster== cl_clean & species==species) %>% test|>
     .[[var]]
   
   descriptions[!descriptions %in% c('---NA---','unnamed protein product','no IPS match','no GO terms')] %>% 
     table %>% 
     sort(decreasing = T) %>% .[1] %>% 
     names %>% 
-    return
+    return  
 }
+
+
 
 
 cluster_descriptions <- sapply(clusterNames, function(cluster){

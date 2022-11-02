@@ -1,20 +1,13 @@
----
-title: "Batch folding analysis"
-output: html_document
-date: "`r Sys.Date()`"
----
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+#### ---- Setup
 Sys.setenv(RETICULATE_PYTHON = "/home/joris/miniconda3/bin/python")
 
 pacman::p_load(magrittr,dplyr,ggplot2, RCy3, reticulate)
 
-```
 
-## Data import
+#### Data import
 
-```{r data import}
+
 setwd("~/scratch/folding_comparision/")
 comparisons <- read.csv2(
   "folding_fatcat_output_inc_rb1_globalidentities.tsv", 
@@ -36,22 +29,23 @@ comparisons$Identity %<>% as.numeric
 comparisons$global_identity %<>% as.numeric
 
 
-```
 
-## Pvalue adjustment
 
-```{r}
+
+#### ---- Pvalue adjustment
+
+
 adj_factor <- comparisons$Subject %>% 
   unique() %>% length
 comparisons$P.adjusted <- as.numeric(comparisons$P.value) * adj_factor
 
 comparisons.filtered <- comparisons %>% 
   filter(P.adjusted <=0.05)
-```
 
-## Plot Identity All vs significant only
 
-```{r}
+#### ---- Plot Identity All vs significant only
+
+
 All_identity <- cbind(as.numeric(comparisons$global_identity), rep("All",times=nrow(comparisons)))
 sig_identity <- cbind(comparisons.filtered$global_identity, rep("Significant only", times=nrow(comparisons.filtered)))
 
@@ -76,19 +70,11 @@ Identities %>%
     ) +
   scale_x_continuous(name='Percent Sequence Identity',breaks=c(seq(1,30,2),seq(30,50,5),80)) +
   ggtitle("Sequence Identity")
-  
-```
 
-## Sanity check plot Score vs length
 
-```{r}
-# Sanity check
-plot(comparisons.filtered$score, comparisons.filtered$align.len)
-```
+#### Vulcano plot Identity vs P-value
 
-## Vulcano plot Identity vs P-value
 
-```{r}
 plot.df <- cbind(
   as.numeric(comparisons$global_identity),
   -1*log10(as.numeric(comparisons$P.adjusted+0.00000000001))
@@ -124,10 +110,10 @@ ggsave(
 ggsave(
   filename = 'identity_vs_pvalue.png',
   device = 'png')
-```
 
-## How many is N in each group
-```{r}
+
+#### How many is N in each group
+
 ident_threshold <- 30
 low_ident_noSig <- comparisons %>% 
   filter(P.adjusted >= 0.05 & global_identity < ident_threshold) 
@@ -142,71 +128,20 @@ low_ident_noSig %>% nrow
 low_ident_Sig %>% nrow
 h_ident_noSig%>% nrow
 h_ident_Sig%>% nrow
-```
-## Random select a pair in each group
-```{r}
+
+#### Random select a pair in each group
+
 low_ident_noSig[sample(nrow(low_ident_noSig),size = 1),] 
 low_ident_Sig[sample(nrow(low_ident_Sig),size = 1), c("Query", "Subject")] %>% paste
 h_ident_noSig[sample(nrow(h_ident_noSig),size = 1), c("Query", "Subject")] %>% paste
 h_ident_Sig[sample(nrow(h_ident_Sig),size = 1), c("Query", "Subject")] %>% paste
-```
 
 
-## Gpal Effectors
-
-```{r}
-effector_ids_gpal <- read.csv(
-  "gpal_effector_lookup_table.txt", 
-  sep = '\t',header = F)
-colnames(effector_ids_gpal) <- c("ID",'Family')
-
-gpal_effector_matches <- comparisons.filtered %>% 
-  filter(Subject %in% effector_ids_gpal$ID)
 
 
-effector_family_names <- effector_ids_gpal %>% 
-  filter(ID %in% gpal_effector_matches$Subject)
+#### Playground
 
-write.csv(
-  gpal_effector_matches, 
-  file='gpal_effectors_matches.csv', 
-  quote = F, 
-  )
 
-lookup_effector_family <- function(fam_name){
-  print(fam_name)
-  table.filter <- gpal_effector_matches %>% 
-  filter(Subject %in% effector_family_names[which(effector_family_names$Family ==fam_name), "ID"])
-  
-  table.filter$Subject %>% 
-    unique %>% 
-    length %>% 
-    print
-  
-  table.filter$Query %>% 
-    unique %>% 
-    length %>% 
-    print
-  
-  table.filter %>% 
-    .[,'Identity'] %>% 
-    mean %>% 
-    print
-  
-  return(table.filter)
-}
-
-gland5_table  <- lookup_effector_family('GLAND5_CDS.fasta')
-sprysec_table <- lookup_effector_family('SPRYSEC_CDS.fasta')
-vap_table     <- lookup_effector_family('VAP_CDS.fasta')
-
- 
-
-```
-
-## Playground
-
-```{r}
 
 ##########################
 table(comparisons.filtered$Query) %>% 
@@ -238,11 +173,10 @@ subset_sprysec <- comparisons.filtered %>%
 
 
 subset_sprysec$opt.rmsd %>% density %>%  plot(main="Optomised RMSD", xlab='RMSD')
-```
 
-# Heatmap
+#### Heatmap
 
-```{r}
+
 library(gplots)
 pvalue_matrix <- comparisons %>% 
   .[,c("Query","Subject","P.adjusted")] %>%
@@ -266,13 +200,12 @@ heatmap.2(
   trace="none"
   )
 
-```
 
-# Cytoscape export
+#### Cytoscape export
 
 
 ### Gpal Functional Annotations
-```{r}
+
 reticulate::source_python("misc.py")
 library(stringr)
 annotations_pal <- read.csv2(
@@ -306,10 +239,10 @@ gpal_nodes %<>% cbind(.,
 
 
 
-```
+
 
 ### Mchit Import Functional Annotations
-```{r}
+
 annotations_mchit <- read.csv2(
   "/mnt/dataHDD/scratch/chitwoodi_genomes/annotation/omicsbox_table_onlyt1.txt",
   sep = '\t'
@@ -339,11 +272,11 @@ mchit_nodes %<>% cbind(.,
                           )
                         ]
                       )
-```
+
 
 ### Format Node and Edge data frames
 
-```{r format node edges}
+
 library(RCy3)
 
 nodes <- rbind(
@@ -357,13 +290,13 @@ colnames(edges) <- c("source","target", "Identity",'P.adjusted')
 write.csv2(edges, file = 'cytoscape_edges.csv')
 
 
-```
+
 
 ### Export Cytoscape
 
 Inside cytoscape I run the clustering algorithm 'fast greedy' to get cluster number assigned to the nodes
 
-```{r export cytoscape}
+
 createNetworkFromDataFrames(nodes,edges)
 
 style.name = "myStyle"
@@ -380,11 +313,11 @@ edgeWidth <- mapVisualProperty('edge width','Identity','p')
 createVisualStyle(style.name, defaults, list(nodeFills,edgeWidth))
 setVisualStyle(style.name)
 
-```
+
 
 ## Merge cluster number and Identity/pvalue
 
-```{r}
+
 
 reticulate::source_python('parse_cluster_info.py')
 cluster_identities <- get_cluster_identities()
@@ -393,9 +326,9 @@ cluster_identities$Identity %<>%
   sapply(function(x) sub(pattern = ",",replacement = '.',x = x)) %>%   as.numeric()
 cluster_identities$P.adjusted %<>% 
   sapply(function(x) sub(pattern = ",",replacement = '.',x = x)) %>%   as.numeric()
-```
 
-```{r}
+
+
 cluster_sizes <- cluster_identities$Cluster %>% table
 cluster_sizes_pruned <- cluster_sizes %>%  
   magrittr::is_less_than(2) %>% 
@@ -407,32 +340,28 @@ cluster_identities_pruned <- cluster_identities %>%
   filter(Cluster %in% cluster_sizes_pruned)
 
 #rownames(cluster_identities_pruned) <- cluster_identities_pruned$Cluster
-```
+
 
 ## Plot identity vs pvalue -> per cluster
 
-```{r}
+
 cluster_identities_pruned %>% 
   ggplot + 
   geom_point(aes(x=Identity, y = -1*log10(P.adjusted+0.000001)))  +
   facet_wrap(~Cluster)
-```
 
-```{r}
 clusterNames <- unique(cluster_identities$Cluster)
 cluster_table <- read.csv2('cytoscape_clusters_new.csv', sep=',')
 
-```
 
-# Cluster average identity
-```{r}
 
-```
+#### Cluster average identity
+# todo
 
 
 
 ## Cluster degrees
-```{r}
+
 getmode <- function(v) {
    uniqv <- unique(v)
    uniqv[which.max(tabulate(match(v, uniqv)))]
@@ -453,11 +382,11 @@ cluster_descriptions %>%
   filter(Cluster %in% cl_names) %>% 
   View
 
-```
+
 
 ## Within cluster per species identities
 run the blast python script first
-```{r}
+
 within_cluster_stats <- read.csv(
   "blasting/within_cluster_stats2.0.csv",
   sep = ';')
@@ -475,12 +404,12 @@ plot <- within_cluster_stats |>
   geom_bar(stat = "identity",
            position = "stack")+
   facet_wrap(~Cluster)
-```
+
 
 
 
 ## Cluster function annotation
-```{r}
+
 get_most_occuring <- function(var,species,cl_clean){
   descriptions <- cluster_table %>%
     filter(X__fastGreedyCluster== cl_clean & species==species) %>% test|>
@@ -532,4 +461,4 @@ colnames(cluster_descriptions) <- c(
   )
 cluster_descriptions$AvgClusterIdentity %<>% as.numeric
 View(cluster_descriptions)
-```
+

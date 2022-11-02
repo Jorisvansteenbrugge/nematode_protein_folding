@@ -34,33 +34,33 @@ MSRISTAVSSHFDIQSNAIFEPKTALHRQFEKIKSSKETFKNNMQIEPHKVKELELILTE
 blast_databases = {
         'Mchit': [
             {
-                'name': 'graminicola',
+                'name': 'M. graminicola',
                 'path': "/home/joris/scratch/folding_comparision/blasting/blast_databases/meloidogyne/meloidogyne_graminicola.PRJNA411966.WBPS17.protein.fa"
             },
             {
-                'name': 'hapla',
+                'name': 'M. hapla',
                 'path': "/home/joris/scratch/folding_comparision/blasting/blast_databases/meloidogyne/meloidogyne_hapla.PRJNA29083.WBPS17.protein.fa"
             },
             {
-                'name': 'incognita',
+                'name': 'M. incognita',
                 'path': "/home/joris/scratch/folding_comparision/blasting/blast_databases/meloidogyne/meloidogyne_incognita.PRJNA340324.WBPS17.protein.fa"
             },
             {
-                'name': 'chitwoodi',
+                'name': 'M. chitwoodi',
                 'path': "/home/joris/scratch/folding_comparision/blasting/blast_databases/meloidogyne/augustus.hints.aa"
             }
         ],
         'Gpal': [
             {
-                'name': "rostochiensis",
+                'name': "G. rostochiensis",
                 'path': "/home/joris/scratch/folding_comparision/blasting/blast_databases/globodera/globodera_rostochiensis.L19_PRJNA695196.WBPS17.protein.fa"
             },
             {
-                'name': 'pallida',
+                'name': 'G. pallida',
                 'path': "/home/joris/scratch/folding_comparision/blasting/blast_databases/globodera/G_pallida_D383_v.0.8.1.structural_annotation.pep.fasta"
             },
             {
-                'name': "schachtii",
+                'name': "H. schachtii",
                 'path': "/home/joris/scratch/folding_comparision/blasting/blast_databases/globodera/H_schachtii_IRS_PROT_named.fasta"
             }
         ]
@@ -142,15 +142,18 @@ if __name__== "__main__":
 
     cluster_file  = import_clusters(clusterfile)
 
-    print("Cluster;MchitMeanIdentity;Exp_graminicola;Exp_hapla;Exp_incognita;Exp_chitwoodi;GpalMeanIdentity;Exp_rostochiensis;Exp_pallida;Exp_schachtii")
+#    print("Cluster;MchitMeanIdentity;Exp_graminicola;Exp_hapla;Exp_incognita;Exp_chitwoodi;GpalMeanIdentity;Exp_rostochiensis;Exp_pallida;Exp_schachtii")
+    print("Cluster;Species;Mean_identity;Exp_species;Exp_value")
 
     for cluster in list(set(cluster_file["__fastGreedyCluster"])):
         logging.info(f"Starting Cl{cluster}")
-        out_line = [f"Cl{cluster}"]
+
 
         for species in ["Mchit", "Gpal"]:
 
+
             tmp_file = NamedTemporaryFile()
+
             cluster_c = cluster_file[(cluster_file['species']== species) &
                                      (cluster_file['__fastGreedyCluster']==cluster)]
 
@@ -161,7 +164,7 @@ if __name__== "__main__":
             """
             pident = get_average_identity(clean_gids, seq_maps[species])
             logging.info(f"average pairwise identity Cl{cluster} for {species}: {pident}")
-            out_line.append(str(pident))
+            #out_line.append(str(pident))
 
 
 
@@ -176,7 +179,7 @@ if __name__== "__main__":
             )
             tmp_file.flush()
             for database in blast_databases[species]:
-
+                out_line = [f"Cl{cluster}", species, str(pident), database['name']]
 
                 raw_blastout = jp.run_ncbi_blast(
                     seq_file_name=tmp_file.name,
@@ -199,8 +202,9 @@ if __name__== "__main__":
                 except ValueError:
                     out_line.append('0')
 
-            """
-            Output statistics to csv
-            """
+                """
+                Output statistics to csv
+                """
+                print(";".join(out_line))
+
             tmp_file.close()
-        print(";".join(out_line))

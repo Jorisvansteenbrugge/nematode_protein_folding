@@ -1,51 +1,58 @@
-
-pacman::p_load(dplyr, ggplot2, RCy3, reticulate, magrittr)
+pacman::p_load(tidyverse, RCy3, magrittr,usethis, testthat, here)
 Sys.setenv(RETICULATE_PYTHON = "/home/joris/miniconda3/bin/python")
+
+library(foldingRproject)
+                                        # Function definitions ----
+
+
+
 
 # Data Import ------------------------
 setwd("~/scratch/folding_comparision/")
-comparisons <- read.csv2(
-  "folding_fatcat_output_inc_rb1_globalidentities.tsv",
-  sep='\t',
-  stringsAsFactors = FALSE
-  ) %>%
-  rbind(., read.csv2(
-    "folding_fatcat_output_rbp_vs_all_globalidentities.tsv",
-    sep='\t',
-    stringsAsFactors = FALSE
-    )
-  )
 
+comparisons <- read_tsv(
+  "folding_fatcat_output_inc_rb1_globalidentities.tsv"
+) |> rbind(
+       read_tsv(
+         "folding_fatcat_output_rbp_vs_all_globalidentities.tsv"
+       )
+     )
 
-
-comparisons$opt.rmsd %<>% as.numeric
-comparisons$P.value %<>% as.numeric
-comparisons$Identity %<>% as.numeric
-comparisons$global_identity %<>% as.numeric
 
 
 
 # Pvalue adjustment ----------------
-adj_factor <- comparisons$Subject %>%
-  unique() %>% length
-comparisons$P.adjusted <- as.numeric(comparisons$P.value) * adj_factor
+
+comparisons$P.adjusted <- p.adjust.custom(comparisons)
 
 comparisons.filtered <- comparisons %>%
-  filter(P.adjusted <=0.05)
+  filter(P.adjusted <= 0.05)
 
 
                                         # Plot identisy all vs significant only
 
-All_identity <- cbind(as.numeric(comparisons$global_identity), rep("All",times=nrow(comparisons)))
-sig_identity <- cbind(comparisons.filtered$global_identity, rep("Significant only", times=nrow(comparisons.filtered)))
+all_identity <- cbind(
+  as.numeric(comparisons$global_identity),
+  rep("All", times = nrow(comparisons)))
 
-Identities <- rbind(All_identity, sig_identity) %>% data.frame
-colnames(Identities) <- c("Identity","Set")
+sig_identity <- cbind(
+  comparisons.filtered$global_identity,
+  rep("Significant only", times = nrow(comparisons.filtered))
+)
+
+identities <- rbind(all_identity, sig_identity) %>% data.frame
+colnames(identities) <- c("Identity", "Set")
 Identities$Identity %<>% as.numeric
 
-All_rmsd <- cbind(as.numeric(comparisons$opt.rmsd), rep("All",times=nrow(comparisons)))
-sig_rmsd <- cbind(comparisons.filtered$opt.rmsd, rep("Significant only", times=nrow(comparisons.filtered)))
-RMSDs <- rbind(All_rmsd, sig_rmsd) %>% data.frame(stringsAsFactors = F)
+all_rmsd <- cbind(
+  as.numeric(comparisons$opt.rmsd),
+  rep("All", times = nrow(comparisons))
+)
+sig_rmsd <- cbind(
+  comparisons.filtered$opt.rmsd,
+  rep("Significant only", times = nrow(comparisons.filtered)))
+
+RMSDs <- rbind(all_rmsd, sig_rmsd) %>% data.frame(stringsAsFactors = FALSE)
 colnames(RMSDs) <- c("RMSD", "Set")
 RMSDs$RMSD %<>% as.numeric
 
@@ -53,40 +60,45 @@ Identities %>%
   ggplot +
   geom_density(
     aes(
-      x=Identity,
-      fill=Set
+      x = Identity,
+      fill = Set
       ),
-    alpha=0.5
+    alpha = 0.5
     ) +
-  scale_x_continuous(name='Percent Sequence Identity',breaks=c(seq(1,30,2),seq(30,50,5),80)) +
+  scale_x_continuous(
+    name = "Percent Sequence Identity",
+    breaks = c(
+      seq(1, 30, 2),
+      seq(30, 50, 5), 80)
+  ) +
   ggtitle("Sequence Identity")
 
                                         # Vulcano Plot -----
 
 plot.df <- cbind(
-  as.numeric(comparisons$global_identity),
-  -1*log10(as.numeric(comparisons$P.adjusted+0.00000000001))
+  as.numeric(comparison),
+  -1 * log10(as.numeric(comparisons$P.adjusted + 0.00000000001))
 )
 
 plot.df%<>% as.data.frame()
-colnames(plot.df) <- c("X","Y")
+colnames(plot.df) <- c("Identity","Pval")
 
-pvalue_log <- -1*log10(0.05)
+pvalue_log <- -1 * log10(0.05)
 plot.df %>%
   ggplot +
   geom_point(
     aes(
-      x = X,
-      y = Y,
-      colour = Y >= pvalue_log
+      x = Identity,
+      y = Pval,
+      colour = Pval >= pvalue_log
       )
     ) +
   scale_colour_manual(
     name = "Significant",
-    values = setNames(c("blue","black"),
-                      c(T,F)
+    values = setNames(c("blue", "black"),
+                      c(TRUE, FALSE)
                       )
-    )+
+    ) +
   xlab("Percent Identity") +
   ylab("-Log10(pvalue)") +
   ggtitle("Identity vs P-value") +
@@ -122,15 +134,40 @@ h_ident_Sig%>% nrow
 
                                         # Playground ----
 
-table(comparisons.filtered$Query) %>%
-  sort(decreasing = T) %>%
-  #density %>%
-  plot(type='l',xaxt="n")
+
+Lookup_effector_family <- function(fam_name) {
+ effector_ids <- effector_list |>
+    filter(Family == fam_name)
 
 
-subset <- comparisons.filtered %>%
-  filter(Query=="g8298.pdb") %>%
-  filter(opt.rmsd <=0.8)
+  return(comparisons |>
+    filter(Subject %in% effector_ids$ID)
+    )
+}
+
+vap_rmsd <- c(0.526, 0.313, 0.344, 0.816, 0.673, 0.644, 0.765)
+vap_rmsd|>min()
+vap_rmsd|>max()
+vap_rmsd |>mean()
+
+sprysec_b_genes <- c("Gpal_D383_g12450.pdb", "Gpal_D383_g12451.pdb","Gpal_D383_g12443.pdb", "Gpal_D383_g12448.pdb", "Gpal_D383_g12403.pdb",
+                   #  "Gpal_D383_g12854.t4",
+                     "Gpal_D383_g16728.pdb", "Gpal_D383_g15175.pdb", "Gpal_D383_g16477.pdb")
+sprysec_rmsd <- c(3.017, 1.579, 0.966, 1.732, 1.249, 1.883, 1.033, 1.367)
+sprysec_rmsd |> min()
+sprysec_rmsd |> max()
+sprysec_rmsd |> mean()
+
+
+
+effector_list <- read.csv(
+  "All_pallida_named_effectos.txt",
+  sep = '\t',
+  header = FALSE,
+  col.names = c("ID", "Family")
+)
+
+Lookup_effector_family("VAP_CDS")
 
 
 plot(
@@ -142,7 +179,6 @@ plot(
 
 
 subset$opt.rmsd %>% density %>%  plot(main="Optomised RMSD", xlab='RMSD')
-
 
 sprysec_example = "Gpal_D383_g01418.pdb"
 sprysec_example2 = "Gpal_D383_g12494.pdb"
@@ -243,7 +279,6 @@ mchit_nodes %<>% cbind(.,
 
                                         # Format Node and Edge data frames ----
 
-
 nodes <- rbind(
   gpal_nodes,
   mchit_nodes
@@ -252,6 +287,8 @@ nodes <- rbind(
 
 edges <- comparisons.filtered[,c('Query',"Subject", "Identity",'P.adjusted')] %>% data.frame
 colnames(edges) <- c("source","target", "Identity",'P.adjusted')
+edges$P.adjustedRev <- 1-edges$P.adjusted
+edges$P.adjustedLog <- -1*log(edges$P.adjusted+.Machine$double.xmin)
 write.csv2(edges, file = 'cytoscape_edges.csv')
 
 
@@ -278,9 +315,9 @@ reticulate::source_python('parse_cluster_info.py')
 cluster_identities <- get_cluster_identities()
 
 cluster_identities$Identity %<>%
-  sapply(function(x) sub(pattern = ",",replacement = '.',x = x)) %>%   as.numeric()
+  sapply(function(x) sub(pattern = ",", replacement = ".",x = x)) %>%   as.numeric()
 cluster_identities$P.adjusted %<>%
-  sapply(function(x) sub(pattern = ",",replacement = '.',x = x)) %>%   as.numeric()
+  sapply(function(x) sub(pattern = ",", replacement = ".",x = x)) %>%   as.numeric()
 
 
 

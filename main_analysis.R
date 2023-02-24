@@ -23,10 +23,50 @@ comparisons <- read_tsv(
 
 # Pvalue adjustment ----------------
 
-comparisons$P.adjusted <- p.adjust.custom(comparisons)
+comparisons$P.adjusted <- p.adjust.custom(
+  comparisons,
+  method = "bonferroni"
+)
 
 comparisons.filtered <- comparisons %>%
   filter(P.adjusted <= 0.05)
+
+                                        # Overview 3m comparisons
+counts_per_query <- comparisons.filtered |>
+  group_by(Query) |>
+  summarise(count = n())
+
+png(filename="histogram.png")
+ counts_per_query |>
+   ggplot() +
+   geom_histogram(
+     aes( x = count),
+     position = position_dodge(width = 0.1),
+     binwidth = 1) +
+   scale_x_continuous(breaks=c(seq(0,30,5),40,50,60,70,80,90,100))+
+   xlab("Number of hits per query") +
+   ylab("Count") +
+   ggtitle("Number of hits per query") +
+   theme_minimal()
+dev.off()
+
+
+comparisons_matrix <- comparisons |>
+  select('Query','Subject','P-value') |>
+  pivot_wider(names_from = 'Subject', values_from = `P-value`) |>
+  as.matrix()
+
+rownames(comparisons_matrix) <- comparisons_matrix[,1]
+
+png(filename="heatmap.png")
+comparisons_matrix[,-1] |>
+  apply(MARGIN=2, as.numeric) |>
+  heatmap()
+dev.off()
+
+
+
+
 
 
                                         # Plot identisy all vs significant only
@@ -196,7 +236,7 @@ pvalue_matrix <- comparisons %>%
   reshape(
     direction = 'wide',
     idvar="Query",
-    timevar = "Subject"
+    timevar = "Subject"a
     )
 
 rownames(pvalue_matrix) <- pvalue_matrix[,1]
@@ -318,8 +358,6 @@ cluster_identities$Identity %<>%
   sapply(function(x) sub(pattern = ",", replacement = ".",x = x)) %>%   as.numeric()
 cluster_identities$P.adjusted %<>%
   sapply(function(x) sub(pattern = ",", replacement = ".",x = x)) %>%   as.numeric()
-
-
 
 cluster_sizes <- cluster_identities$Cluster %>% table
 cluster_sizes_pruned <- cluster_sizes %>%

@@ -11,11 +11,9 @@ import venn # local py file
 
 logging.basicConfig(level=logging.INFO)
 
-gp_unkown = []
-gp_knowable = []
+unknown = []
+knowable = []
 
-mc_unkown = []
-mc_knowable = []
 
 def get_genes_cluster(cluster_name, network_table, species_marker):
     sub = network_table[network_table["__fastGreedyCluster"] == cluster_name]
@@ -39,23 +37,15 @@ def is_annotated(row, t):
     interGO = _has_interGO(row["InterPro GO IDs"])
     return True in (description, interGO)
 
-def check_annotations(fun_anno, spprefix, annotation_table):
+def check_annotations(fun_anno,  annotation_table):
     annotated = list(
         fun_anno.apply(is_annotated,
                             axis=1,
                             t=gp_gene_annotations))
-    if spprefix == "Gpal":
-        knowable = gp_knowable
-        unkown = gp_unkown
-    elif spprefix == "Mchit":
-        knowable = mc_knowable
-        unkown = mc_unkown
 
-    if False in annotated:
-        if True in annotated:
-            knowable.append(str(cluster))
-        else:
-            unkown.append(str(cluster))
+
+    return annotated
+    
 
 
 network_table = pd.read_csv("cytoscape_clusters.csv",
@@ -76,28 +66,31 @@ for cluster in clusters:
     mc_genes = clean_gene_names(cluster, network_table, "Mchit")
     mc_functional = mc_gene_annotations.query("SeqName.isin(@mc_genes)")
 
-    check_annotations(gp_functional, "Gpal", gp_gene_annotations)
-    check_annotations(mc_functional, "Mchit", mc_gene_annotations)
+    gp_annotated_bools = check_annotations(gp_functional, gp_gene_annotations)
+    mc_annotated_bools = check_annotations(mc_functional, mc_gene_annotations)
 
-logging.info(f"Gp knowable: {len(gp_knowable)}")
-logging.info(f"Gp unkown: {len(gp_unkown)}")
-
-logging.info(f"Gp knowable clusters: {', '.join(gp_knowable)}")
-logging.info(f"Gp unkown clusters: {', '.join(gp_unkown)}")
-
-logging.info(f"Mc knowable: {len(mc_knowable)}")
-logging.info(f"Mc unkown: {len(mc_unkown)}")
-
-logging.info(f"Mc knowable clusters: {', '.join(mc_knowable)}")
-logging.info(f"Mc unkown clusters: {', '.join(mc_unkown)}")
+    combined_annotated = gp_annotated_bools + mc_annotated_bools
 
 
-labels = venn.get_labels([gp_knowable,
-                          gp_unkown,
-                          mc_knowable,
-                          mc_unkown])
-fig, ax = venn.venn4(labels, names = ["Gp Knowable",
-                                      "Gp Unknown",
-                                      "Mc Knowable",
-                                      "Mc Unknown"])
+    if False in combined_annotated:
+        if True in combined_annotated:
+            knowable.append(str(cluster))
+        else:
+            unknown.append(str(cluster))
+
+logging.info(f"Knowable: {len(knowable)}")
+logging.info(f"Unknown: {len(unknown)}")
+
+logging.info(f"Knowable clusters: {', '.join(knowable)}")
+logging.info(f"Unknown clusters: {', '.join(unknown)}")
+
+
+
+labels = venn.get_labels([clusters,
+                          knowable,
+                          unknown,])
+
+fig, ax = venn.venn3(labels, names = ["Clusters",
+                                      "Knowable",
+                                      "Unknown"])
 fig.show()

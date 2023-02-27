@@ -58,10 +58,33 @@ comparisons_matrix <- comparisons |>
 
 rownames(comparisons_matrix) <- comparisons_matrix[,1]
 
-png(filename="heatmap.png")
-comparisons_matrix[,-1] |>
-  apply(MARGIN=2, as.numeric) |>
-  heatmap()
+comparisons_matrix <- comparisons_matrix[,-1] |>
+  apply(MARGIN=2, as.numeric)
+
+reorder_matrix <- function(matrix, cutoff = 0.05) {
+  matrix <- matrix[,(matrix < cutoff )|>
+                    colSums() |>
+                    order(decreasing = T)]
+  matrix <- matrix[(matrix < cutoff )|>
+                    rowSums() |>
+                    order(decreasing = T),]
+  return(matrix)
+}
+
+png(filename="~/org-roam/alphafold_data/heatmap.png")
+  comparisons_matrix |>
+    reorder_matrix(cutoff=0.05) |>
+    apply(MARGIN=2, function(x) as.numeric(x < 0.05)) |>
+    gplots::heatmap.2(trace = "none",
+                    labRow = FALSE,
+                    labCol = FALSE,
+                    dendrogram = 'none',
+                    col = c("#000000","#00FF00"),
+                    Rowv=FALSE,
+                    Colv=FALSE,
+                    key=FALSE,
+                    xlab = 'G. pallida proteins',
+                    ylab = 'M. chitwoodi proteins')
 dev.off()
 
 

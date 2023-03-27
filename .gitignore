@@ -7,5 +7,5 @@
 !*.Rmd
 
 !*/
-
+blasting/
 global_blast_comparisons.py

@@ -291,5 +291,3 @@ cl_names <- cluster_sizes[which(cluster_sizes == 2)] %>%
 cluster_descriptions %>%
   filter(Cluster %in% cl_names) %>%
   View
-
-

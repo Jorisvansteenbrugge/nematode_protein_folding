@@ -12,7 +12,7 @@
 #' data <- data.frame( "Query" = rep(name, n), "P.value" = sample( seq(0,1, by=0.01), n))
 #' data$p.adjusted <- p.adjust.custom(data, df_N_col = "Query", df_P_col = "P.value")
 #'
-p.adjust.custom <- function(comparison_df, df_N_col = "Query" , df_P_col = "P-value", method = "fdr" ) {
+p.adjust.custom <- function(comparison_df, df_N_col = "Query" , df_P_col = "P-value", method = "bonferroni" ) {
   unique_querries <- comparison_df[[df_N_col]] |> unique()
   adjusted_pvals <- c()
   for ( query in unique_querries ){

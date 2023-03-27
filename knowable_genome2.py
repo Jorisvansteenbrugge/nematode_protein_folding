@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+"""DEPRECATED SCRIPT"""
+
+
+
 """Get the knowable genome - i.e. functionally annotate genes based on other genes that have a
 similar shape
 """
@@ -74,6 +78,9 @@ def check_annotations(fun_anno, spprefix, annotation_table):
             unknown_genes += unannotated_gene_ids
 
 
+def get_knowable_gpal():
+    return gp_knowable
+
 network_table = pd.read_csv("cytoscape_clusters.csv",
                             sep=',')
 
@@ -105,6 +112,8 @@ logging.info(f"Mc unkown: {len(mc_unkown)}")
 
 logging.info(f"Mc knowable clusters: {', '.join(mc_knowable)}")
 logging.info(f"Mc unkown clusters: {', '.join(mc_unkown)}")
+
+print(gp_knowable_genes)
 
 labels = venn.get_labels([gp_knowable, mc_knowable])
 

@@ -1,9 +1,4 @@
 pacman::p_load(tidyverse, RCy3, magrittr,usethis, testthat, here)
-Sys.setenv(RETICULATE_PYTHON = "/home/joris/miniconda3/bin/python")
-
-library(foldingRproject)
-                                        # Function definitions ----
-
 
 
 

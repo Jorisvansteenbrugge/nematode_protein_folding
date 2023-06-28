@@ -20,12 +20,15 @@ comparisons <- read_tsv(
 # Pvalue adjustment ----------------
 
 
+log_p_zero_replacement <- 0.0000000000001
 
 adj_factor <- comparisons$Subject %>%
   unique() %>% length
+
 comparisons$P.adjusted <- as.numeric(comparisons$`P-value`) * adj_factor
-
-
+comparisons$P.adjusted[comparisons$P.adjusted > 1] <- 1
+comparisons$P.adjustedLog <- -log10(comparisons$P.adjusted)
+comparisons$P.adjustedLog[is.infinite(comparisons$P.adjustedLog)] <- log_p_zero_replacement
 
 comparisons.filtered <- comparisons %>%
   filter(P.adjusted <=0.05)
@@ -88,39 +91,40 @@ reorder_matrix <- function(matrix, cutoff = 0.05, decreasing = T) {
 
 png('subfigures/heatmap_structures.png', 2800, 2800, pointsize = 100)
 
-breakpoints <- c(0, 0.05, 1)
-
-assign_color <- function(value) {
-  if (value < breakpoints[2]) {
-    return('blue')
-  } else {
-    return("red")
-  }
-}
 
 
-
-comparisons |>
-  select('Query','Subject','P-value') |>
-  pivot_wider(names_from = 'Subject', values_from = `P-value`) |>
+structure_plot.df <- comparisons |>
+  select('Query','Subject','P.adjustedLog') |>
+  pivot_wider(names_from = 'Subject', values_from = `P.adjustedLog`) |>
   dplyr::select(-"Query") |>
   as.matrix() |>
-  apply(MARGIN=2, as.numeric) |>
-  reorder_matrix(cutoff=0.05) |>
-  add(0.00000000001) |>
-  log10() |>
-  multiply_by(-1)|>
-  gplots::heatmap.2(trace = "none",
-                  labRow = FALSE,
-                  sepcolor = NA,
-                  labCol = FALSE,
-                  dendrogram = 'column',
-                  col = colorRampPalette(c("black","#faf3f2")),
-                  #Rowv=FALSE,
-                  #Colv=FALSE,
-                  key=TRUE,
-                  xlab = 'G. pallida Structures',
-                  ylab = 'M. chitwoodi Structures')
+  apply(MARGIN=2, as.numeric)
+
+# Define the breakpoints (-5, 1.3, 11)
+breakpoints <- c(0, 1.3, max(structure_plot.df, na.rm=T))
+
+# Create a custom color palette
+my_palette <- colorRampPalette(c("blue", "yellow"))(n = 10)
+
+# Replace colors for values below 1.3 with shades of blue
+
+my_palette[1:(breakpoints[2] - breakpoints[1]) / (breakpoints[3] - breakpoints[1]) * 10] <- colorRampPalette(c("lightblue", "blue"))(n = (breakpoints[2] - breakpoints[1]) / (breakpoints[3] - breakpoints[1]) * 10 )
+
+
+
+gplots::heatmap.2(
+          structure_plot.df,
+          trace = "none",
+          labRow = FALSE,
+          sepcolor = NA,
+          labCol = FALSE,
+          dendrogram = 'both',
+          col = my_palette,
+          #Rowv=FALSE,
+          #Colv=FALSE,
+          key=TRUE,
+          xlab = 'G. pallida Structures',
+          ylab = 'M. chitwoodi Structures')
 
 dev.off()
 
@@ -186,7 +190,7 @@ dev.off()
 
 plot.df <- cbind(
   as.numeric(comparisons$global_identity),
-  -1 * log10(as.numeric(comparisons$P.adjusted + 0.00000000001))
+  comparisons$P.adjustedLog
 )
 
 plot.df%<>% as.data.frame()

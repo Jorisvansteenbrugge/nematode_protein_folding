@@ -1,4 +1,4 @@
-pacman::p_load(tidyverse, magrittr,usethis, testthat, here, gridExtra,gridGraphics, gplots, colorRamp2)
+pacman::p_load(tidyverse, magrittr,usethis, testthat, here, gridExtra,gridGraphics, gplots, colorRamp2, RColorBrewer)
 require(RCy3)
 
 
@@ -42,7 +42,8 @@ comparisons.filtered <- comparisons %>%
 
 
                                         # Histogram number of hits per query
-gpal_hist <- comparisons.filtered |>
+png("subfigures/gpal_hist.png")
+comparisons.filtered |>
   group_by(Query) |>
   summarise(count = n()) |>
    ggplot() +
@@ -57,8 +58,9 @@ gpal_hist <- comparisons.filtered |>
    ylab("Count") +
    ggtitle("") +
     theme_minimal()
-
-mchit_hist <- comparisons.filtered |>
+dev.off()
+png("subfigures/mchit_hist.png")
+comparisons.filtered |>
   group_by(Subject) |>
   summarise(count = n()) |>
    ggplot() +
@@ -73,7 +75,7 @@ mchit_hist <- comparisons.filtered |>
    ylab("Count") +
    ggtitle("") +
    theme_minimal()
-
+dev.off()
 
 
 
@@ -89,7 +91,7 @@ reorder_matrix <- function(matrix, cutoff = 0.05, decreasing = T) {
 
 
 
-png('subfigures/heatmap_structures.png', 2800, 2800, pointsize = 100)
+
 
 
 
@@ -100,57 +102,146 @@ structure_plot.df <- comparisons |>
   as.matrix() |>
   apply(MARGIN=2, as.numeric)
 
-# Define the breakpoints (-5, 1.3, 11)
-breakpoints <- c(0, 1.3, max(structure_plot.df, na.rm=T))
+## # Define the breakpoints (-5, 1.3, 11)
+## breakpoints <- c(0, 1.3, max(structure_plot.df, na.rm=T))
 
-# Create a custom color palette
-my_palette <- colorRampPalette(c("blue", "yellow"))(n = 10)
+## # Create a custom color palette
+## my_palette <- colorRampPalette(c("blue", "yellow"))(n = 10)
 
-# Replace colors for values below 1.3 with shades of blue
+## # Replace colors for values below 1.3 with shades of blue
 
-my_palette[1:(breakpoints[2] - breakpoints[1]) / (breakpoints[3] - breakpoints[1]) * 10] <- colorRampPalette(c("lightblue", "blue"))(n = (breakpoints[2] - breakpoints[1]) / (breakpoints[3] - breakpoints[1]) * 10 )
+## my_palette[1:(breakpoints[2] - breakpoints[1]) / (breakpoints[3] - breakpoints[1]) * 10] <- colorRampPalette(c("lightblue", "blue"))(n = (breakpoints[2] - breakpoints[1]) / (breakpoints[3] - breakpoints[1]) * 10 )
 
 
+## gplots::heatmap.2(
+##           structure_plot.df,
+##           trace = "none",
+##           labRow = FALSE,
+##           sepcolor = NA,
+##           labCol = FALSE,
+##           dendrogram = 'both',
+##           col = my_palette,
+##           #Rowv=FALSE,
+##           #Colv=FALSE,
+##           key=TRUE,
+##           xlab = 'G. pallida Structures',
+##           ylab = 'M. chitwoodi Structures')
 
-gplots::heatmap.2(
-          structure_plot.df,
-          trace = "none",
-          labRow = FALSE,
-          sepcolor = NA,
-          labCol = FALSE,
-          dendrogram = 'both',
-          col = my_palette,
-          #Rowv=FALSE,
-          #Colv=FALSE,
-          key=TRUE,
-          xlab = 'G. pallida Structures',
-          ylab = 'M. chitwoodi Structures')
+color.scale <- function(colors.use,y.val){
+                        if(class(y.val) == "matrix"){
+                            scale.use <-  c(as.numeric(rownames(y.val))[nrow(y.val)],as.numeric(rownames(y.val))[1],as.numeric(rownames(y.val))[1]-as.numeric(rownames(y.val))[2])
+                        }
+                        if(class(y.val) == "numeric"){
+                            scale.use <- c(min(y.val,na.rm=T),max(y.val,na.rm=T),diff(c(min(y.val,na.rm=T),max(y.val,na.rm=T)))/100)
+                        }
+                        seq1 <- seq(scale.use[1],scale.use[2],scale.use[3])    ###adjust for optimal effect
+                        ramp <- colorRamp(colors.use, bias=1)
+                        colors.out <- rgb(ramp(seq(0, 1, length = length(seq1))), max = 255)
+                        return(colors.out)
+                       }
 
+scale.legend <- function(input,bg.col,col.scale,x.lab,start.zero,lwd.nu,cex.nu,xlab.line,ylab.line,line.col){
+                          if(missing(input)){                                   stop("no input defined")}
+                          if(missing(bg.col)){                                  bg.col <- "white"}
+                          if(missing(col.scale)){                               col.scale <- c("#8E0152","#C51B7D","#DE77AE","#F1B6DA","#FDE0EF","#F7F7F7","#E6F5D0","#B8E186","#7FBC41","#4D9221","#276419")}
+                          if(missing(x.lab)){                                   x.lab <- ""}
+                          if(missing(start.zero)){                              start.zero <- TRUE}
+                          if(missing(lwd.nu)){                                  lwd.nu <- 2}
+                          if(missing(cex.nu)){                                  cex.nu <- 1}
+                          if(missing(xlab.line)){                               xlab.line <- 2.5}
+                          if(missing(ylab.line)){                               ylab.line <- 2.5}
+                          if(missing(line.col)){                                line.col <- "white"}
+
+                          ###Remove NA
+
+                          ###Make the color scale
+                          colors.use <- color.scale(col.scale,input)
+
+                          ###first plotting layer
+                          if(start.zero==TRUE){x.range <- c(0,max(input,na.rm=T))}
+                          if(start.zero==FALSE){x.range <- c(min(input,na.rm=T),max(input,na.rm=T))}
+
+                          x.val <- axis.output(x.range[1],x.range[2])[[1]]
+                              x.val <- x.val[c(1:which(x.val > max(x.range))[1])]
+                          y.val <- hist(input,breaks=x.val,plot=FALSE)$counts
+
+                          y.range <- c(0,max(y.val))
+                          x.range <- c(min(x.val),max(x.val))
+
+                          plot(x=x.val,y=c(y.val,y.val[length(y.val)]),type="s",xaxs="i",axes=F,xlab="",ylab="",xlim=x.range,ylim=y.range)
+                          col.grad <- seq(x.range[1],x.range[2],length.out=length(colors.use)+1)
+                          for(i in 2:length(col.grad)){
+                              rect(xleft=col.grad[i-1],xright=col.grad[i]+10000,ybottom=-40^6,ytop=40^6,border=NA,col=colors.use[i-1])
+                          }
+                          points(x=x.val,y=c(y.val,y.val[length(y.val)]),type="s",col=line.col,lwd=lwd.nu,lend=1)
+
+                          ###close it up, maxe axes etc
+                          box()
+                          fixed.axis <- axis.output(x.range[1],x.range[2])
+                          axis(1,fixed.axis[[1]],labels=F,tcl=-0.2)
+                          if(start.zero){axis(1,c(0,fixed.axis[[2]]),c(0,fixed.axis[[2]]),mgp=c(3,0.7,0),cex.axis=cex.nu,tcl=-0.5,las=1)}
+                          if(start.zero==FALSE){axis(1,fixed.axis[[2]],fixed.axis[[2]],mgp=c(3,0.7,0),cex.axis=cex.nu,tcl=-0.5,las=1)}
+                          mtext(side=1,text=x.lab,cex=cex.nu+0.5,line=xlab.line)
+                          fixed.axis <- axis.output(y.range[1],y.range[2])
+                          axis(2,fixed.axis[[1]],labels=F,tcl=-0.2)
+                          axis(2,fixed.axis[[2]],fixed.axis[[2]],mgp=c(3,0.7,0),cex.axis=cex.nu,tcl=-0.5,las=1)
+                          mtext(side=2,"Counts",cex=cex.nu+0.5,line=ylab.line)
+                         }
+
+
+axis.output <- function(min.nu,max.nu){
+
+                        output <- NULL; output <- as.list(output)
+                        for(i in sort(c(10^c(seq(-2,8,by=1)),2*10^c(seq(-2,8,by=1)),4*10^c(seq(-2,8,by=1)),6*10^c(seq(-2,8,by=1)),8*10^c(seq(-2,8,by=1))),decreasing=T)){
+                            ###determine the scale of the differences
+                            if(max.nu-min.nu < i*2){
+                                small.axis <- seq(floor(min.nu/i)*i,ceiling(max.nu/i)*i*2,by=i/20)
+                                large.axis <- seq(floor(min.nu/i)*i,ceiling(max.nu/i)*i*2,by=i/4)[-1]
+                            }
+                        }
+                        output[[1]] <- small.axis
+                        output[[2]] <- large.axis
+                        return(output)
+}
+
+png('subfigures/heatmap_structures.png', 2500, 2800, pointsize = 100)
+#svg('subfigures/heatmap_structures.svg')
+colscale <- color.scale(colors.use = brewer.pal(11, "Reds"), y.val = as.numeric(structure_plot.df))
+heatmap(structure_plot.df, scale = 'none', col=colscale, margins=c(10,8))
+dev.off()
+png("subfigures/heatmap_structures_scale.png")
+scale.legend(input=as.numeric(structure_plot.df),start.zero=F,col.scale=colscale,line.col="black")
 dev.off()
 
 
-png("subfigures/heatmap_sequences.png", 2800, 2800, pointsize = 100)
-
-comparisons |>
+png("subfigures/heatmap_sequences.png", 2500, 2800, pointsize = 100)
+sequence_plot.df <- comparisons |>
   select('Query','Subject','global_identity') |>
   pivot_wider(names_from = 'Subject', values_from = 'global_identity') |>
   dplyr::select(-'Query') |>
   as.matrix() |>
-  apply(MARGIN=2, as.numeric) |>
-  reorder_matrix(cutoff=25, decreasing = F) |>
-  #apply(MARGIN=2, function(x) as.numeric(x > 25)) |>
-    gplots::heatmap.2(trace = "none",
-                    labRow = F,
-                    labCol = F,
-                    dendrogram = 'column',
-                    col = colorRampPalette(c("#faf3f2", "black")),
-                    #Rowv=FALSE,
-                    #Colv=FALSE,
-                    key=TRUE,
-                    xlab = 'G. pallida Sequences',
-                    ylab = 'M. chitwoodi Sequences')
-
+  apply(MARGIN=2, as.numeric)
+colscale <- color.scale(colors.use = brewer.pal(11, "Reds"), y.val = as.numeric(sequence_plot.df))
+heatmap(sequence_plot.df, scale = 'none', col=colscale, margins=c(10,8))
 dev.off()
+png("subfigures/heatmap_sequences_scale.png")
+#par(fig=c(0,0.3,0.5,1), new =T)
+scale.legend(input=as.numeric(sequence_plot.df),start.zero=F,col.scale=colscale,line.col="black")
+dev.off()
+
+  ## reorder_matrix(cutoff=25, decreasing = F) |>
+  ## #apply(MARGIN=2, function(x) as.numeric(x > 25)) |>
+  ##   gplots::heatmap.2(trace = "none",
+  ##                   labRow = F,
+  ##                   labCol = F,
+  ##                   dendrogram = 'column',
+  ##                   col = colorRampPalette(c("#faf3f2", "black")),
+  ##                   #Rowv=FALSE,
+  ##                   #Colv=FALSE,
+  ##                   key=TRUE,
+  ##                   xlab = 'G. pallida Sequences',
+  ##                   ylab = 'M. chitwoodi Sequences')
+#dev.off()
 
 a <- comparisons |>
   select('Query','Subject','global_identity') |>

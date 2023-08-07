@@ -2,7 +2,7 @@ pacman::p_load(tidyverse, magrittr, kableExtra, magick, webshot)
 
 
 
-setwd("/home/joris/scratch/folding_comparision/knowable_genome/")
+setwd("/home/joris/scratch/folding_comparison/knowable_genome/")
 
 annotation_table <- read_tsv(
   "knowable_cluster_table_annotated_filtered.csv"
